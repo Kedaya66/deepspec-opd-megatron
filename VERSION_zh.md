@@ -43,4 +43,4 @@ feature 服务使用另外 4 张 GPU；默认数据基线为 5,632 条长序列�
 v5 已具备 OPD、Megatron-Core EP、FP8、rollout cache、共享内存特征导出和服务自愈
 能力。完整多 epoch 收敛对比、缓存偏移长期影响及 FSDP2/HF 路线对照仍需继续验证。
 
-更完整的实验依据和历史记录见 [V5_DESIGN_zh.md](./V5_DESIGN_zh.md)。
+更完整的实验依据和历史记录见 [V5_DESIGN.md](./V5_DESIGN.md)。
