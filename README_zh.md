@@ -2,6 +2,8 @@
 
 [English](./README.md) | [简体中文](./README_zh.md)
 
+**基于 Megatron-Core、专家并行和 FP8，高效稳定训练大规模推测解码 Draft Model 的 OPD 流水线。**
+
 DeepSpec OPD Megatron 是基于 DeepSpec 的生产训练分支，面向
 DeepSeek-V4-Flash 的在线策略蒸馏（OPD）和推测解码 draft model 训练。该版本将
 Megatron-Core MoE、Expert Parallel、Transformer Engine FP8、rollout 缓存与共享

@@ -2,6 +2,9 @@
 
 [English](./README.md) | [简体中文](./README_zh.md)
 
+**An OPD pipeline for efficient and reliable training of large speculative-
+decoding draft models with Megatron-Core, Expert Parallelism, and FP8.**
+
 DeepSpec OPD Megatron is a production-oriented DeepSpec branch for
 DeepSeek-V4-Flash online policy distillation (OPD) and speculative-decoding
 draft-model training. It combines Megatron-Core MoE, Expert Parallelism,
