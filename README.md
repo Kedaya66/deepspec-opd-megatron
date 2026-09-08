@@ -1,17 +1,22 @@
 # DeepSpec OPD Megatron
 
-DeepSpec OPD Megatron 是基于 DeepSpec 的生产训练分支，面向
-DeepSeek-V4-Flash 的在线策略蒸馏（OPD）和推测解码 draft model 训练。该版本将
-Megatron-Core MoE、Expert Parallel、Transformer Engine FP8、rollout 缓存与共享
-内存特征传输组合成适合多张 H200 GPU 的训练流水线。
+[English](./README.md) | [简体中文](./README_zh.md)
 
-当前仓库版本为 **v5**。生产配置、实测默认值、性能数据和限制见
-[VERSION.md](./VERSION.md)，设计过程与实验记录见 [V5_DESIGN.md](./V5_DESIGN.md)。
+DeepSpec OPD Megatron is a production-oriented DeepSpec branch for
+DeepSeek-V4-Flash online policy distillation (OPD) and speculative-decoding
+draft-model training. It combines Megatron-Core MoE, Expert Parallelism,
+Transformer Engine FP8, rollout caching, and shared-memory feature transport
+into a training pipeline designed for multi-H200 systems.
 
-> 本分支包含针对内部 DeepSeek-V4-Flash 服务和数据路径的配置。公开或迁移部署时，
-> 请先替换模型、数据、缓存、checkpoint 和 SGLang 服务地址；密钥应只放在本地 `.env`。
+The current release is **v5**. See [VERSION.md](./VERSION.md) for measured
+defaults, performance results, and constraints, and [V5_DESIGN.md](./V5_DESIGN.md)
+for detailed design and experiment notes.
 
-## v5 快速开始
+> This branch includes environment-specific DeepSeek-V4-Flash service and data
+> paths. Replace model, dataset, cache, checkpoint, and SGLang endpoint settings
+> before deploying elsewhere. Keep credentials only in a local environment file.
+
+## v5 Quick Start
 
 ```bash
 python -m pip install -r requirements.txt
@@ -21,32 +26,34 @@ python scripts/prebuild_rollout_cache.py \
 bash run_train_opd.sh
 ```
 
-核心入口配置是 `config/dspark/dspark_dskv4flash_v5.py`。默认训练拓扑为单节点
-4 张训练 GPU、EP=4、TP=1；target 服务使用另 4 张 GPU。运行前必须根据机器环境
-检查配置中的绝对路径和 `sglang_server_address`。
+The primary configuration is config/dspark/dspark_dskv4flash_v5.py. The
+default topology uses four training GPUs with EP=4 and TP=1, plus another four
+GPUs for the target service. Review all absolute paths and the SGLang server
+address before running it in a new environment.
 
-## 仓库组成
+## Repository Layout
 
-| 路径 | 内容 |
+| Path | Purpose |
 | --- | --- |
-| `deepspec/data/` | 在线特征客户端、预取、rollout 与 target cache 数据管线 |
-| `deepspec/modeling/` | DSpark、DFlash、Eagle3 及 DeepSeek-V4 Megatron 实现 |
-| `deepspec/trainer/megatron/` | 并行组、DDP、优化器、checkpoint 和训练器 |
-| `config/dspark/` | 通用和 DeepSeek-V4-Flash 专用训练配置 |
-| `scripts/ops/` | 服务哨兵与训练启动门禁 |
-| `scripts/data/` | 数据生成、target cache 和 SGLang 特征服务工具 |
-| `tests/` | FSDP2、Megatron parity/TP 和 rollout 路径测试 |
-| `eval.py` / `eval_datasets/` | 推测解码评测入口与基准数据 |
+| deepspec/data | Online feature client, prefetch, rollout, and target-cache pipelines |
+| deepspec/modeling | DSpark, DFlash, Eagle3, and DeepSeek-V4 Megatron implementations |
+| deepspec/trainer/megatron | Parallel groups, DDP, optimizer, checkpoint, and trainers |
+| config/dspark | Generic and DeepSeek-V4-Flash training configurations |
+| scripts/ops | Service sentinel and training startup gate |
+| scripts/data | Data generation, target-cache, and SGLang feature-service tools |
+| tests | FSDP2, Megatron parity/TP, and rollout-path tests |
+| eval.py / eval_datasets | Evaluation entry point and benchmark datasets |
 
-## 验证
+## Verification
 
 ```bash
 python -m pytest tests/test_rollout_loader_paths.py
 python -m pytest tests/test_mcore_parity.py tests/test_mcore_tp.py
 ```
 
-分布式 smoke test 和完整训练依赖 CUDA、Megatron-Core、Transformer Engine、
-对应模型权重及可用的 target feature 服务。
+Distributed smoke tests and full training require CUDA, Megatron-Core,
+Transformer Engine, the corresponding model weights, and a running target
+feature service.
 
 ## Upstream DeepSpec
 
