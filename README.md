@@ -9,7 +9,7 @@ Transformer Engine FP8, rollout caching, and shared-memory feature transport
 into a training pipeline designed for multi-H200 systems.
 
 The current release is **v5**. See [VERSION.md](./VERSION.md) for measured
-defaults, performance results, and constraints, and [V5_DESIGN.md](./V5_DESIGN.md)
+defaults, performance results, and constraints, and [V5_DESIGN_en.md](./V5_DESIGN_en.md)
 for detailed design and experiment notes.
 
 > This branch includes environment-specific DeepSeek-V4-Flash service and data

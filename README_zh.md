@@ -8,7 +8,7 @@ Megatron-Core MoE、Expert Parallel、Transformer Engine FP8、rollout 缓存与
 内存特征传输组合成适合多张 H200 GPU 的训练流水线。
 
 当前仓库版本为 **v5**。生产配置、实测默认值、性能数据和限制见
-[VERSION.md](./VERSION.md)，设计过程与实验记录见 [V5_DESIGN.md](./V5_DESIGN.md)。
+[VERSION_zh.md](./VERSION_zh.md)，设计过程与实验记录见 [V5_DESIGN.md](./V5_DESIGN.md)。
 
 > 本分支包含针对内部 DeepSeek-V4-Flash 服务和数据路径的配置。公开或迁移部署时，
 > 请先替换模型、数据、缓存、checkpoint 和 SGLang 服务地址；密钥只放在本地环境中。

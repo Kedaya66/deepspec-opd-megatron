@@ -1,5 +1,7 @@
 # deepspec-v5:OPD 最优训练流水线
 
+[English](./V5_DESIGN_en.md) | [简体中文](./V5_DESIGN.md)
+
 2026-08-12 从 train-v4/deepspec-opd 派生。**每个默认值都有实测依据**(见下),
 测量环境:node-h200-1,target=DeepSeek-V4-Flash-0731(SGLang TP4,GPU 0-3),
 训练 GPU 4-7,数据集 5632 条医疗对话(序列 p50≈15.6k)。
