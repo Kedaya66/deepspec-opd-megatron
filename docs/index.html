@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>V24 OPD 训练曲线</title>
+<style>
+  :root{--bg:#f7f7f5;--card:#fff;--ink:#1a1a1a;--sub:#666;--line:#e0e0e0;--accent:#2563eb;
+    --c1:#2563eb;--c2:#dc2626;--c3:#16a34a;--c4:#9333ea;--c5:#ea580c;--grid:#eee;--warn:#b45309;--warnbg:#fef3c7;}
+  @media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0f1115;--card:#1a1d24;--ink:#e8e8e8;--sub:#9aa0aa;--line:#2a2e37;--grid:#242832;--warnbg:#3a2e12;--warn:#fbbf24;}}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"PingFang SC","Microsoft YaHei",sans-serif}
+  .wrap{max-width:1000px;margin:0 auto;padding:28px 20px 60px}
+  h1{font-size:22px;margin:0 0 4px}
+  .meta{color:var(--sub);font-size:13px;margin-bottom:20px}
+  .callout{background:var(--warnbg);border-left:3px solid var(--warn);border-radius:6px;padding:14px 16px;margin:0 0 24px;font-size:13.5px}
+  .callout b{color:var(--warn)}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:720px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 16px 10px}
+  .card h2{font-size:15px;margin:0 0 2px}
+  .card .desc{color:var(--sub);font-size:12px;margin:0 0 8px}
+  .legend{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;margin-top:6px}
+  .legend span{display:inline-flex;align-items:center;gap:5px}
+  .legend i{width:11px;height:3px;border-radius:2px;display:inline-block}
+  svg{width:100%;height:auto;display:block;overflow:visible}
+  .tick{fill:var(--sub);font-size:10px}
+  .full{grid-column:1/-1}
+  table{border-collapse:collapse;width:100%;font-size:13px;margin-top:4px}
+  th,td{text-align:right;padding:5px 10px;border-bottom:1px solid var(--line)}
+  th:first-child,td:first-child{text-align:left}
+  .up{color:var(--c3)} .flat{color:var(--sub)} .down{color:var(--c2)}
+  code{background:rgba(128,128,128,.15);padding:1px 5px;border-radius:4px;font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>DeepSpec V24 · OPD 训练曲线</h1>
+  <div class="meta">数据集 promptv24(9370 条)· gbs=1024 · 2 epoch = 18 step · 目标 DeepSeek-V4-Flash-0731(冻结,temp0 rollout)· 从 tensorboard 标量导出</div>
+
+  <div class="meta" style="margin:-12px 0 20px"><a href="experiments.html" style="color:var(--accent)">→ 全量实验浏览器(39 run × 21 指标,可勾选叠加)</a></div>
+  <div class="callout">
+    <b>关键发现:总 loss 的"收敛"是假象。</b> 总 loss 4.24→2.69 的降幅里 <b>99% 来自 confidence_loss</b>(1.79→0.25),而占权重 0.9 的 <b>L1 特征损失 18 步纹丝不动</b>(1.87→1.88),CE 仅 7.88→7.47(≈随机猜词)。训练自测 <b>accept_rate@0–4 从第 1 步起就只有 ~6% 且全程平坦</b>——draft 的 token 预测能力从未被学到。根因:训练前向缺 128 滑窗注意力 + rope(YaRN)与 serving 口径断裂(已修,待重训)。
+  </div>
+
+  <div class="grid">
+    <div class="card full">
+      <h2>Loss 分解</h2>
+      <p class="desc">总 loss = 0.9·L1 + 0.1·CE + 1.0·confidence。看清降幅来自谁。</p>
+      <div id="c_loss"></div>
+      <div class="legend" id="l_loss"></div>
+    </div>
+    <div class="card">
+      <h2>accept_rate@k(训练自测)</h2>
+      <p class="desc">draft 第 k 位提议与 target 分布的重叠。健康应 ~30%,实际全程 ~6%。</p>
+      <div id="c_acc"></div>
+      <div class="legend" id="l_acc"></div>
+    </div>
+    <div class="card">
+      <h2>学习率 / 梯度范数</h2>
+      <p class="desc">lr cosine 1e-5→0,grad_norm 178→25——训练过程本身正常,问题在目标/口径。</p>
+      <div id="c_opt"></div>
+      <div class="legend" id="l_opt"></div>
+    </div>
+    <div class="card full">
+      <h2>首尾对照</h2>
+      <table id="tbl"><thead><tr><th>指标</th><th>step 1</th><th>step 18</th><th>变化</th></tr></thead><tbody></tbody></table>
+    </div>
+
+    <div class="card full">
+      <h2>训练吞吐对比(公平:按 gbs 归一化 = 样本/秒)</h2>
+      <p class="desc">从各 run 的 event wall_time 算每步耗时,吞吐 = gbs ÷ 每步耗时。只列可多步计时的 run。</p>
+      <div id="c_tput"></div>
+      <div class="callout" style="margin:12px 0 0">
+        <b>结论:</b>吞吐最快是 <b>V24(生产配置,gbs1024,0.72 样本/s)</b>——大 batch 摊薄每步固定开销。同 gbs 公平对比下两个优化开关的收益:<b>缓存回放 4.8×</b>(cached16 vs nocache16 @gbs64)、<b>shm 特征通道 2.4×</b>(ep2_shm vs ep2_full @gbs512)。
+      </div>
+    </div>
+  </div>
+  <div class="meta" style="margin-top:24px">生成自 <code>V24_opd_2ep</code> tensorboard event · 静态快照,非实时。</div>
+</div>
+
+<script>
+const DATA = {"train/accept_rate@0": [[1, 0.057647], [2, 0.057918], [3, 0.057689], [4, 0.057367], [5, 0.057921], [6, 0.057542], [7, 0.056753], [8, 0.056116], [9, 0.053209], [10, 0.055148], [11, 0.05587], [12, 0.057382], [13, 0.057898], [14, 0.058665], [15, 0.059772], [16, 0.058955], [17, 0.05957], [18, 0.059386]], "train/accept_rate@1": [[1, 0.067601], [2, 0.067582], [3, 0.066666], [4, 0.066754], [5, 0.065105], [6, 0.063933], [7, 0.062853], [8, 0.062805], [9, 0.049119], [10, 0.05071], [11, 0.053297], [12, 0.057733], [13, 0.06073], [14, 0.061932], [15, 0.063855], [16, 0.062651], [17, 0.063219], [18, 0.062899]], "train/accept_rate@2": [[1, 0.064828], [2, 0.065169], [3, 0.063835], [4, 0.06404], [5, 0.061999], [6, 0.061941], [7, 0.060757], [8, 0.059968], [9, 0.04562], [10, 0.047548], [11, 0.050435], [12, 0.055064], [13, 0.05757], [14, 0.059579], [15, 0.060792], [16, 0.060647], [17, 0.060868], [18, 0.061007]], "train/accept_rate@3": [[1, 0.064896], [2, 0.064329], [3, 0.063205], [4, 0.063547], [5, 0.061714], [6, 0.061227], [7, 0.060075], [8, 0.059654], [9, 0.04444], [10, 0.046521], [11, 0.049641], [12, 0.053652], [13, 0.057012], [14, 0.057541], [15, 0.060304], [16, 0.059416], [17, 0.059756], [18, 0.059794]], "train/accept_rate@4": [[1, 0.064266], [2, 0.063317], [3, 0.063142], [4, 0.062695], [5, 0.060657], [6, 0.060227], [7, 0.059293], [8, 0.058655], [9, 0.044107], [10, 0.046382], [11, 0.049342], [12, 0.053883], [13, 0.055603], [14, 0.057623], [15, 0.059391], [16, 0.05885], [17, 0.059297], [18, 0.058944]], "train/block_supervised_tokens_abs": [[1, 4.959854], [2, 4.960047], [3, 4.944574], [4, 4.94574], [5, 4.965416], [6, 4.955406], [7, 4.95504], [8, 4.939468], [9, 4.960434], [10, 4.945694], [11, 4.955538], [12, 4.951057], [13, 4.945709], [14, 4.974541], [15, 4.959447], [16, 4.946838], [17, 4.954144], [18, 4.950981]], "train/block_supervised_tokens_ratio": [[1, 0.991971], [2, 0.992009], [3, 0.988915], [4, 0.989148], [5, 0.993083], [6, 0.991081], [7, 0.991008], [8, 0.987894], [9, 0.992087], [10, 0.989139], [11, 0.991108], [12, 0.990211], [13, 0.989142], [14, 0.994908], [15, 0.991889], [16, 0.989368], [17, 0.990829], [18, 0.990196]], "train/ce_loss": [[1, 7.881233], [2, 7.855549], [3, 7.810956], [4, 7.800179], [5, 7.67523], [6, 7.67485], [7, 7.635924], [8, 7.607886], [9, 7.86455], [10, 7.796987], [11, 7.712528], [12, 7.610485], [13, 7.557061], [14, 7.505192], [15, 7.474848], [16, 7.489655], [17, 7.480084], [18, 7.469223]], "train/confidence_abs_error": [[1, 0.774701], [2, 0.742941], [3, 0.689302], [4, 0.662773], [5, 0.513529], [6, 0.49212], [7, 0.464306], [8, 0.449632], [9, 0.193354], [10, 0.169767], [11, 0.152223], [12, 0.137733], [13, 0.129718], [14, 0.125374], [15, 0.122659], [16, 0.120699], [17, 0.120237], [18, 0.120577]], "train/confidence_bias": [[1, 0.773931], [2, 0.741951], [3, 0.687754], [4, 0.66077], [5, 0.507893], [6, 0.485737], [7, 0.457033], [8, 0.442091], [9, 0.170482], [10, 0.141287], [11, 0.11797], [12, 0.095356], [13, 0.082278], [14, 0.074443], [15, 0.068492], [16, 0.066933], [17, 0.065542], [18, 0.066075]], "train/confidence_cumprod_bias": [[1, 0.630449], [2, 0.579126], [3, 0.500649], [4, 0.465978], [5, 0.30552], [6, 0.284566], [7, 0.260829], [8, 0.24829], [9, 0.080904], [10, 0.069163], [11, 0.060933], [12, 0.052112], [13, 0.047389], [14, 0.044295], [15, 0.041995], [16, 0.041517], [17, 0.040731], [18, 0.040886]], "train/confidence_loss": [[1, 1.78618], [2, 1.607632], [3, 1.368328], [4, 1.269661], [5, 0.852744], [6, 0.805299], [7, 0.746369], [8, 0.717016], [9, 0.311046], [10, 0.286594], [11, 0.270736], [12, 0.261608], [13, 0.257245], [14, 0.255531], [15, 0.25522], [16, 0.253422], [17, 0.253471], [18, 0.254122]], "train/grad_norm": [[1, 178.686218], [2, 167.816101], [3, 158.623169], [4, 151.565445], [5, 126.30114], [6, 111.870605], [7, 107.050018], [8, 105.323738], [9, 43.620911], [10, 36.236408], [11, 30.664436], [12, 26.186743], [13, 24.747337], [14, 24.908619], [15, 24.345243], [16, 25.37816], [17, 25.306322], [18, 25.421236]], "train/l1_loss": [[1, 1.873577], [2, 1.873671], [3, 1.875125], [4, 1.875208], [5, 1.877424], [6, 1.878489], [7, 1.880494], [8, 1.881478], [9, 1.903037], [10, 1.899213], [11, 1.894846], [12, 1.887821], [13, 1.883739], [14, 1.881313], [15, 1.87803], [16, 1.879557], [17, 1.878616], [18, 1.878902]], "train/loss": [[1, 4.236774], [2, 4.092167], [3, 3.843125], [4, 3.711339], [5, 3.30593], [6, 3.219197], [7, 3.176032], [8, 3.14397], [9, 2.797474], [10, 2.741274], [11, 2.73635], [12, 2.710548], [13, 2.674547], [14, 2.686039], [15, 2.693913], [16, 2.672546], [17, 2.668974], [18, 2.693284]], "train/lr": [[1, 1e-05], [2, 1e-05], [3, 9e-06], [4, 9e-06], [5, 8e-06], [6, 7e-06], [7, 7e-06], [8, 6e-06], [9, 5e-06], [10, 4e-06], [11, 3e-06], [12, 2e-06], [13, 2e-06], [14, 1e-06], [15, 1e-06], [16, 0.0], [17, 0.0], [18, 0.0]], "train/sampled_anchors_abs": [[1, 127.5], [2, 127.404297], [3, 126.905273], [4, 127.125], [5, 127.625], [6, 127.375], [7, 127.375], [8, 126.884766], [9, 127.5], [10, 127.125], [11, 127.279297], [12, 127.25], [13, 127.009766], [14, 127.770508], [15, 127.391602], [16, 127.125], [17, 127.263672], [18, 127.25]], "train/sampled_anchors_ratio": [[1, 0.996094], [2, 0.995346], [3, 0.991447], [4, 0.993164], [5, 0.99707], [6, 0.995117], [7, 0.995117], [8, 0.991287], [9, 0.996094], [10, 0.993164], [11, 0.99437], [12, 0.994141], [13, 0.992264], [14, 0.998207], [15, 0.995247], [16, 0.993164], [17, 0.994247], [18, 0.994141]], "train/tau_probabilistic": [[1, 1.060425], [2, 1.060715], [3, 1.060424], [4, 1.060131], [5, 1.06057], [6, 1.060164], [7, 1.059338], [8, 1.058667], [9, 1.055027], [10, 1.057139], [11, 1.05801], [12, 1.059744], [13, 1.060452], [14, 1.061343], [15, 1.062534], [16, 1.061636], [17, 1.062301], [18, 1.062153]], "train/valid_anchors_abs": [[1, 496.714844], [2, 496.923828], [3, 494.414062], [4, 496.96582], [5, 498.47168], [6, 498.883789], [7, 497.021484], [8, 496.435547], [9, 497.874023], [10, 495.114258], [11, 497.250977], [12, 495.886719], [13, 497.067383], [14, 499.15625], [15, 498.302734], [16, 495.480469], [17, 497.902344], [18, 494.091797]], "train/valid_anchors_ratio": [[1, 0.033476], [2, 0.033701], [3, 0.033864], [4, 0.033488], [5, 0.033838], [6, 0.034021], [7, 0.03381], [8, 0.034248], [9, 0.033945], [10, 0.033476], [11, 0.034007], [12, 0.033862], [13, 0.033766], [14, 0.033746], [15, 0.034021], [16, 0.033746], [17, 0.034033], [18, 0.033414]]};
+const COL = ['#2563eb','#dc2626','#16a34a','#9333ea','#ea580c'];
+function series(tag){return (DATA[tag]||[]).map(([s,v])=>({x:s,y:v}));}
+function draw(elId,legId,specs,{ylog=false,y0=null}={}){
+  const W=460,H=210,PL=48,PR=12,PT=12,PB=26;
+  const all=specs.flatMap(s=>series(s.tag));
+  if(!all.length)return;
+  const xs=all.map(p=>p.x),ys=all.map(p=>p.y);
+  let xmin=Math.min(...xs),xmax=Math.max(...xs);
+  let ymin=y0!=null?y0:Math.min(...ys),ymax=Math.max(...ys);
+  if(ylog){ymin=Math.max(1e-7,Math.min(...ys.filter(v=>v>0)));}
+  if(ymin===ymax){ymax=ymin+1;}
+  const pad=(ymax-ymin)*0.08;ymin-=pad;ymax+=pad;
+  const fx=x=>PL+(x-xmin)/(xmax-xmin||1)*(W-PL-PR);
+  const fy=y=>{if(ylog){const a=Math.log10(Math.max(y,1e-7)),lo=Math.log10(Math.max(ymin,1e-7)),hi=Math.log10(ymax);return PT+(1-(a-lo)/(hi-lo||1))*(H-PT-PB);}return PT+(1-(y-ymin)/(ymax-ymin||1))*(H-PT-PB);};
+  let g='';
+  // y gridlines
+  for(let i=0;i<=4;i++){const yv=ymin+(ymax-ymin)*i/4,yy=fy(yv);g+=`<line x1="${PL}" y1="${yy}" x2="${W-PR}" y2="${yy}" stroke="var(--grid)" stroke-width="1"/>`;g+=`<text class="tick" x="${PL-6}" y="${yy+3}" text-anchor="end">${yv.toExponential?fmt(yv):yv}</text>`;}
+  // x ticks
+  for(const xv of [1,6,12,18]){const xx=fx(xv);g+=`<text class="tick" x="${xx}" y="${H-8}" text-anchor="middle">${xv}</text>`;}
+  g+=`<text class="tick" x="${(W)/2}" y="${H+4}" text-anchor="middle" opacity=".7">step</text>`;
+  specs.forEach((sp,i)=>{const pts=series(sp.tag);if(!pts.length)return;
+    const d=pts.map((p,j)=>(j?'L':'M')+fx(p.x).toFixed(1)+' '+fy(p.y).toFixed(1)).join(' ');
+    g+=`<path d="${d}" fill="none" stroke="${sp.color||COL[i]}" stroke-width="2" stroke-linejoin="round"/>`;
+  });
+  document.getElementById(elId).innerHTML=`<svg viewBox="0 0 ${W} ${H+6}" role="img">${g}</svg>`;
+  if(legId)document.getElementById(legId).innerHTML=specs.map((s,i)=>`<span><i style="background:${s.color||COL[i]}"></i>${s.name}</span>`).join('');
+}
+function fmt(v){if(v===0)return '0';const a=Math.abs(v);if(a>=100)return v.toFixed(0);if(a>=1)return v.toFixed(2);if(a>=0.01)return v.toFixed(3);return v.toExponential(0);}
+
+// 加权分量,直观显示对总 loss 的贡献(与总 loss 同尺度)
+DATA['_l1w']=series('train/l1_loss').map(p=>[p.x,p.y*0.9]);
+DATA['_cew']=series('train/ce_loss').map(p=>[p.x,p.y*0.1]);
+draw('c_loss','l_loss',[
+  {tag:'train/loss',name:'总 loss',color:'#111827'},
+  {tag:'train/confidence_loss',name:'confidence ×1.0',color:COL[1]},
+  {tag:'_l1w',name:'L1 ×0.9',color:COL[0]},
+  {tag:'_cew',name:'CE ×0.1',color:COL[2]},
+],{});
+
+draw('c_acc','l_acc',[0,1,2,3,4].map(k=>({tag:'train/accept_rate@'+k,name:'@'+k})),{y0:0});
+draw('c_opt','l_opt',[{tag:'train/lr',name:'lr',color:COL[3]},{tag:'train/grad_norm',name:'grad_norm(右轴略)',color:COL[4]}],{});
+
+// 训练吞吐横向条形图(gbs 归一化)
+const TPUT=[
+  {name:'V24_opd_2ep (gbs1024)',v:0.72,hi:1},
+  {name:'V5_ep2_shm (gbs512)',v:0.57},
+  {name:'V5_ep2_full (gbs512)',v:0.23},
+  {name:'V5_cached16 (gbs64)',v:0.21},
+  {name:'V5_nocache16 (gbs64)',v:0.044},
+];
+(function(){
+  const W=800,rowH=34,PL=190,PR=70,PT=6,H=PT+TPUT.length*rowH+6;
+  const max=Math.max(...TPUT.map(d=>d.v));
+  let g='';
+  TPUT.forEach((d,i)=>{
+    const y=PT+i*rowH, bw=(W-PL-PR)*(d.v/max), col=d.hi?'#16a34a':'#2563eb';
+    g+=`<text x="${PL-8}" y="${y+rowH/2+4}" text-anchor="end" style="font-size:12px" fill="var(--ink)">${d.name}</text>`;
+    g+=`<rect x="${PL}" y="${y+6}" width="${bw.toFixed(1)}" height="${rowH-14}" rx="3" fill="${col}"/>`;
+    g+=`<text x="${PL+bw+6}" y="${y+rowH/2+4}" style="font-size:12px" fill="var(--sub)">${d.v} 样本/s</text>`;
+  });
+  document.getElementById('c_tput').innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img">${g}</svg>`;
+})();
+
+// 首尾表
+const tbl=[['总 loss','train/loss'],['L1(×0.9 前)','train/l1_loss'],['CE','train/ce_loss'],['confidence','train/confidence_loss'],['accept_rate@0','train/accept_rate@0'],['grad_norm','train/grad_norm'],['lr','train/lr']];
+const tb=document.querySelector('#tbl tbody');
+tbl.forEach(([name,tag])=>{const s=series(tag);if(!s.length)return;const a=s[0].y,b=s[s.length-1].y;
+  const rel=a?((b-a)/Math.abs(a)*100):0;
+  const cls=Math.abs(rel)<3?'flat':(b<a?'down':'up');
+  const arrow=Math.abs(rel)<3?'≈ 持平':(b<a?'↓ ':'↑ ')+rel.toFixed(0)+'%';
+  tb.insertAdjacentHTML('beforeend',`<tr><td>${name}</td><td>${fmt(a)}</td><td>${fmt(b)}</td><td class="${cls}">${arrow}</td></tr>`);});
+</script>
+</body>
+</html>
