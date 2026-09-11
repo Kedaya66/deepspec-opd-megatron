@@ -82,6 +82,7 @@ def create_dspark_attention_mask(
     seq_len: int,
     block_size: int,
     device: torch.device,
+    sliding_window=None,
 ):
     def dspark_mask_mod(b, h, q_idx, kv_idx):
         del h
@@ -89,6 +90,9 @@ def create_dspark_attention_mask(
         anchor_pos = anchor_positions[b, q_block_id]
         is_context = kv_idx < seq_len
         mask_context = is_context & (kv_idx < anchor_pos)
+        if sliding_window is not None:
+            # 与 serving DSPARK draft 128 滑窗一致:只看 anchor 前 window 个 context 位置
+            mask_context = mask_context & (kv_idx >= anchor_pos - sliding_window)
         is_draft = kv_idx >= seq_len
         kv_block_id = (kv_idx - seq_len) // block_size
         mask_draft = is_draft & (q_block_id == kv_block_id)
@@ -316,6 +320,7 @@ def create_dspark_attention_mask_dense(
     seq_len: int,
     block_size: int,
     device: torch.device,
+    sliding_window=None,
 ) -> torch.Tensor:
     """Dense boolean DSpark attention mask ``[B, 1, Q, KV]`` (True = attend).
 
@@ -345,6 +350,11 @@ def create_dspark_attention_mask_dense(
     mask_context = is_context.view(1, 1, kv_len) & (
         kv_idx.view(1, 1, kv_len) < anchor_pos.unsqueeze(-1)
     )                                                                 # [B, Q, KV]
+    if sliding_window is not None:
+        # 与 serving DSPARK draft 128 滑窗一致:只看 anchor 前 window 个 context 位置
+        mask_context = mask_context & (
+            kv_idx.view(1, 1, kv_len) >= anchor_pos.unsqueeze(-1) - sliding_window
+        )
     mask_draft = is_draft.view(1, 1, kv_len) & (
         q_block_id.view(1, q_len, 1) == kv_block_id.view(1, 1, kv_len)
     )                                                                 # [1, Q, KV] -> broadcast

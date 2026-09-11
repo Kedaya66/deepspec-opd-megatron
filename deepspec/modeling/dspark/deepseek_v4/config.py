@@ -112,6 +112,11 @@ def _build_draft_config(target_config, model_args, *, architecture: str):
     # so hash routing (a serving feature of the target) is always disabled.
     draft_config.num_hash_layers = 0
 
+    # serving 的 DSPARK draft 用 rope_original_seq_len=0 => 纯 RoPE(无 YaRN/mscale)。
+    # 训练侧对齐:禁用从 target 继承来的 YaRN,否则训练 rope 与部署 rope 口径断裂
+    # (accept 无法迁移到 serving)。sliding_window 从 target 继承的 128 已自动生效。
+    draft_config.disable_yarn = True
+
     # Optional draft-side MoE overrides: the target model is very wide
     # (hundreds of experts); a draft can route far fewer without hurting the
     # speculative match rate. Absent overrides, the target's MoE shape is reused.

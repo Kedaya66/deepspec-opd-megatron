@@ -14,6 +14,7 @@ zero_grad_buffer -> 微批 no_sync 累积 -> finish_grad_sync -> optimizer.step(
 (clip 在 step 内部完成,返回 grad_norm)。
 """
 
+import os
 from contextlib import nullcontext
 
 import torch

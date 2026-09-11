@@ -170,6 +170,7 @@ class DeepSeekV4DSparkModelMatchV1(DeepSeekV4DSparkModel):
             seq_len=seq_len,
             block_size=self.block_size,
             device=device,
+            sliding_window=getattr(self.config, "sliding_window", None),
         )
         output_hidden, prenorm_hidden = self._forward_backbone(
             position_ids=full_position_ids,

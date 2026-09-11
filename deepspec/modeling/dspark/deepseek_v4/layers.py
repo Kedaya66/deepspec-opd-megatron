@@ -85,7 +85,9 @@ class DeepSeekV4RotaryEmbedding(nn.Module):
         )
         self.attention_scaling = 1.0
 
-        rope_scaling = getattr(config, "rope_scaling", None)
+        # serving 的 DSPARK draft 用 rope_original_seq_len=0 => 纯 RoPE(跳过 YaRN、无 mscale)。
+        # 训练侧对齐:disable_yarn=True 时不读 rope_scaling,attention_scaling 保持 1.0。
+        rope_scaling = None if getattr(config, "disable_yarn", False) else getattr(config, "rope_scaling", None)
         if rope_scaling and str(rope_scaling.get("type", rope_scaling.get("rope_type"))) == "yarn":
             factor = float(rope_scaling["factor"])
             orig_max = int(
